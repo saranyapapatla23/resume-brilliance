@@ -140,22 +140,6 @@ function Home() {
       });
       setResult(res);
 
-      if (user) {
-        try {
-          await save({
-            data: {
-              fileName: file.name,
-              role: finalRole,
-              jobDescription: jobDescription.trim(),
-              score: res.score,
-              matchPercent: res.matchPercent,
-              result: res as unknown as Record<string, unknown>,
-            },
-          });
-        } catch (err) {
-          console.error("Failed to save analysis:", err);
-        }
-      }
 
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
