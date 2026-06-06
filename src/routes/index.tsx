@@ -70,8 +70,7 @@ const LOADING_MESSAGES = [
 
 function Home() {
   const analyze = useServerFn(analyzeResume);
-  const save = useServerFn(saveAnalysis);
-  const { user } = useAuth();
+
 
   const [file, setFile] = useState<File | null>(null);
   const [role, setRole] = useState<string>("");
