@@ -195,7 +195,7 @@ export const analyzeResume = createServerFn({ method: "POST" })
       );
     }
 
-    const analysis = await callLovableAI(resumeText, data.role);
+    const analysis = await callGeminiAI(resumeText, data.role);
 
     let emailSent = false;
     let emailError: string | undefined;
