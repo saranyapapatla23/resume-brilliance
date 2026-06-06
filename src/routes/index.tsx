@@ -156,38 +156,10 @@ function Home() {
     setError(null);
   }
 
-  async function signOut() {
-    await supabase.auth.signOut();
-  }
-
   return (
     <main className="min-h-screen w-full px-4 py-10 md:py-16">
       <div className="mx-auto max-w-3xl">
-        <nav className="mb-6 flex items-center justify-end gap-2 print:hidden">
-          {user ? (
-            <>
-              <Link
-                to="/history"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-card/60 hover:text-foreground"
-              >
-                <History className="size-4" /> History
-              </Link>
-              <button
-                onClick={signOut}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-card/60 hover:text-foreground"
-              >
-                <LogOut className="size-4" /> Sign out
-              </button>
-            </>
-          ) : (
-            <Link
-              to="/auth"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/60 px-3 py-1.5 text-sm hover:bg-card"
-            >
-              <LogIn className="size-4" /> Sign in
-            </Link>
-          )}
-        </nav>
+
 
         <header className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur">
