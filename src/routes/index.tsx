@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useRef, type FormEvent } from "react";
 import {
@@ -15,9 +15,6 @@ import {
   Mail,
   X,
   Download,
-  History,
-  LogIn,
-  LogOut,
   Wand2,
   Briefcase,
 } from "lucide-react";
@@ -34,9 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { analyzeResume, type AnalysisResult } from "@/lib/analyze.functions";
-import { saveAnalysis } from "@/lib/history.functions";
-import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
