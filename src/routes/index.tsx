@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useRef, type FormEvent } from "react";
 import {
@@ -14,11 +14,18 @@ import {
   Trophy,
   Mail,
   X,
+  Download,
+  History,
+  LogIn,
+  LogOut,
+  Wand2,
+  Briefcase,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -27,20 +34,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { analyzeResume, type AnalysisResult } from "@/lib/analyze.functions";
+import { saveAnalysis } from "@/lib/history.functions";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ResumeLens — AI Resume Analyzer & Scorer" },
+      { title: "ResumeLens — AI Resume Analyzer, JD Match & Rewriter" },
       {
         name: "description",
         content:
-          "Upload your resume, pick a role, and get an instant AI score with detailed feedback delivered to your inbox.",
+          "Upload your resume, paste a job description, and get an instant AI score, JD match %, missing skills, rewrite suggestions and an emailed report.",
       },
       { property: "og:title", content: "ResumeLens — AI Resume Analyzer" },
       {
         property: "og:description",
-        content: "Instant resume scoring + a full improvement report emailed to you.",
+        content: "Instant resume scoring, JD comparison, rewrite suggestions and email report.",
       },
     ],
   }),
@@ -50,6 +60,8 @@ export const Route = createFileRoute("/")({
 const ROLES = [
   "Backend Developer",
   "Frontend Developer",
+  "Full-Stack Developer",
+  "Data Scientist",
   "HR / Human Resources",
   "Other",
 ] as const;
@@ -57,18 +69,21 @@ const ROLES = [
 const LOADING_MESSAGES = [
   "Reading your resume...",
   "Analyzing structure and keywords...",
-  "Scoring for the selected role...",
+  "Comparing against the job description...",
   "Drafting your improvement report...",
   "Sending it to your inbox...",
 ];
 
 function Home() {
   const analyze = useServerFn(analyzeResume);
+  const save = useServerFn(saveAnalysis);
+  const { user } = useAuth();
 
   const [file, setFile] = useState<File | null>(null);
   const [role, setRole] = useState<string>("");
   const [customRole, setCustomRole] = useState("");
   const [email, setEmail] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
   const [error, setError] = useState<string | null>(null);
@@ -122,9 +137,33 @@ function Home() {
     try {
       const pdfBase64 = await fileToBase64(file);
       const res = await analyze({
-        data: { pdfBase64, fileName: file.name, role: finalRole, email },
+        data: {
+          pdfBase64,
+          fileName: file.name,
+          role: finalRole,
+          email,
+          jobDescription: jobDescription.trim(),
+        },
       });
       setResult(res);
+
+      if (user) {
+        try {
+          await save({
+            data: {
+              fileName: file.name,
+              role: finalRole,
+              jobDescription: jobDescription.trim(),
+              score: res.score,
+              matchPercent: res.matchPercent,
+              result: res as unknown as Record<string, unknown>,
+            },
+          });
+        } catch (err) {
+          console.error("Failed to save analysis:", err);
+        }
+      }
+
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -140,9 +179,39 @@ function Home() {
     setError(null);
   }
 
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
+
   return (
     <main className="min-h-screen w-full px-4 py-10 md:py-16">
       <div className="mx-auto max-w-3xl">
+        <nav className="mb-6 flex items-center justify-end gap-2 print:hidden">
+          {user ? (
+            <>
+              <Link
+                to="/history"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-card/60 hover:text-foreground"
+              >
+                <History className="size-4" /> History
+              </Link>
+              <button
+                onClick={signOut}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-card/60 hover:text-foreground"
+              >
+                <LogOut className="size-4" /> Sign out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/auth"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/60 px-3 py-1.5 text-sm hover:bg-card"
+            >
+              <LogIn className="size-4" /> Sign in
+            </Link>
+          )}
+        </nav>
+
         <header className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur">
             <Sparkles className="size-3.5 text-accent" />
@@ -152,8 +221,8 @@ function Home() {
             <span className="text-gradient">ResumeLens</span>
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground md:text-lg">
-            Upload your resume, pick a target role, and get an instant score plus a detailed
-            improvement report emailed straight to your inbox.
+            Score your resume, compare it against a job description, and get rewrite
+            suggestions — all in one click.
           </p>
         </header>
 
@@ -161,7 +230,6 @@ function Home() {
           <ResultView result={result} onReset={reset} email={email} />
         ) : (
           <form onSubmit={onSubmit} className="surface-card p-6 md:p-8">
-            {/* Upload zone */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Resume PDF</Label>
               <div
@@ -263,6 +331,26 @@ function Home() {
               </div>
             </div>
 
+            <div className="mt-6 space-y-2">
+              <Label className="text-sm font-medium">
+                <Briefcase className="mr-1.5 inline size-4 text-primary-glow" />
+                Job description (optional)
+              </Label>
+              <Textarea
+                placeholder="Paste a job description to get a match %, missing technologies, and recommended additions."
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                className="min-h-32 bg-input/60"
+              />
+            </div>
+
+            {!user && (
+              <div className="mt-4 rounded-lg border border-border bg-card/40 px-4 py-3 text-xs text-muted-foreground">
+                💡 <Link to="/auth" className="text-primary-glow hover:underline">Sign in</Link>{" "}
+                to save every analysis to your history.
+              </div>
+            )}
+
             {error && (
               <div className="mt-5 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-foreground">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -299,9 +387,9 @@ function Home() {
         {!result && (
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
             {[
-              { icon: Target, title: "Role-targeted scoring" },
-              { icon: Bot, title: "ATS-friendly feedback" },
-              { icon: Mail, title: "Detailed report by email" },
+              { icon: Target, title: "Role + JD targeted scoring" },
+              { icon: Wand2, title: "AI rewrite suggestions" },
+              { icon: Mail, title: "Email + PDF report" },
             ].map(({ icon: Icon, title }) => (
               <div
                 key={title}
@@ -316,8 +404,8 @@ function Home() {
           </div>
         )}
 
-        <footer className="mt-12 text-center text-xs text-muted-foreground">
-          Powered by Lovable AI · Reports delivered via Gmail
+        <footer className="mt-12 text-center text-xs text-muted-foreground print:hidden">
+          Powered by Gemini · Reports delivered via Gmail
         </footer>
       </div>
     </main>
@@ -338,7 +426,7 @@ function ResultView({
     score >= 85 ? "Excellent" : score >= 70 ? "Strong" : score >= 55 ? "Decent" : "Needs work";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" id="report-content">
       <div className="surface-card glow-ring overflow-hidden">
         <div className="relative p-8 text-center">
           <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -358,8 +446,7 @@ function ResultView({
           {result.emailSent ? (
             <div className="mx-auto mt-6 inline-flex items-center gap-2 rounded-full border border-success/40 bg-success/10 px-4 py-2 text-sm text-success">
               <CheckCircle2 className="size-4" />
-              📩 Your detailed report has been sent to{" "}
-              <span className="font-medium">{email}</span>
+              📩 Report sent to <span className="font-medium">{email}</span>
             </div>
           ) : (
             <div className="mx-auto mt-6 inline-flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-left text-xs text-destructive-foreground">
@@ -372,6 +459,64 @@ function ResultView({
           )}
         </div>
       </div>
+
+      {result.matchPercent != null && (
+        <div className="surface-card p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Briefcase className="size-4 text-primary-glow" />
+                <h3 className="text-sm font-semibold tracking-wide">Job Description Match</h3>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                How closely your resume aligns with the role.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-gradient text-4xl font-bold">{result.matchPercent}%</div>
+            </div>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-primary to-primary-glow transition-all"
+              style={{ width: `${Math.min(100, Math.max(0, result.matchPercent))}%` }}
+            />
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-destructive">
+                Missing Technologies
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {(result.missingTechnologies ?? []).map((t, i) => (
+                  <span
+                    key={i}
+                    className="rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive-foreground"
+                  >
+                    {t}
+                  </span>
+                ))}
+                {!result.missingTechnologies?.length && (
+                  <span className="text-xs text-muted-foreground">None — great coverage.</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent">
+                Recommended Additions
+              </h4>
+              <ul className="space-y-1.5 text-sm">
+                {(result.recommendedAdditions ?? []).map((s, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent" />
+                    <span className="text-muted-foreground">{s}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Panel icon={CheckCircle2} title="Strengths" accent="text-success">
@@ -422,7 +567,36 @@ function ResultView({
         </Panel>
       </div>
 
-      <div className="flex justify-center">
+      {result.rewrites?.length > 0 && (
+        <div className="surface-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Wand2 className="size-4 text-accent" />
+            <h3 className="text-sm font-semibold tracking-wide">AI Rewrite Suggestions</h3>
+          </div>
+          <div className="space-y-4">
+            {result.rewrites.map((r, i) => (
+              <div key={i} className="rounded-xl border border-border bg-background/40 p-4">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Before
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{r.before}</p>
+                <div className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-primary-glow">
+                  After
+                </div>
+                <p className="mt-1 text-sm font-medium text-foreground">{r.after}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap justify-center gap-3 print:hidden">
+        <Button
+          onClick={() => window.print()}
+          className="rounded-xl bg-gradient-to-r from-primary to-primary-glow px-6 font-semibold text-primary-foreground"
+        >
+          <Download className="size-4" /> Download PDF
+        </Button>
         <Button
           onClick={onReset}
           variant="outline"
