@@ -23,7 +23,7 @@ export const saveAnalysis = createServerFn({ method: "POST" })
       job_description: data.jobDescription,
       score: data.score,
       match_percent: data.matchPercent ?? null,
-      result: data.result,
+      result: data.result as never,
     });
     if (error) throw new Error(error.message);
     return { ok: true };
