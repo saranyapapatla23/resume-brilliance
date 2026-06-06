@@ -293,12 +293,6 @@ function Home() {
               />
             </div>
 
-            {!user && (
-              <div className="mt-4 rounded-lg border border-border bg-card/40 px-4 py-3 text-xs text-muted-foreground">
-                💡 <Link to="/auth" className="text-primary-glow hover:underline">Sign in</Link>{" "}
-                to save every analysis to your history.
-              </div>
-            )}
 
             {error && (
               <div className="mt-5 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-foreground">
