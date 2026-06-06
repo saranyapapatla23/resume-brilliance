@@ -28,12 +28,12 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   return Array.isArray(text) ? text.join("\n") : text;
 }
 
-async function callLovableAI(resumeText: string, role: string) {
-  const apiKey = process.env.LOVABLE_API_KEY;
-  if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
+async function callGeminiAI(resumeText: string, role: string) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
   const targetRole = role?.trim() || "general best practices (no specific role provided)";
-  const system = `You are ResumeLens, an expert technical recruiter and resume coach. Analyze resumes critically but constructively. Always respond by calling the provided tool with structured JSON. Score harshly: average resumes score 55-70, strong resumes 75-85, exceptional 90+.`;
+  const system = `You are ResumeLens, an expert technical recruiter and resume coach. Analyze resumes critically but constructively. Always respond with a JSON object matching the provided schema. Score harshly: average resumes score 55-70, strong resumes 75-85, exceptional 90+.`;
   const user = `Analyze this resume for the role: "${targetRole}".
 
 RESUME CONTENT:
@@ -43,66 +43,54 @@ ${resumeText.slice(0, 15000)}
 
 Return a thorough evaluation: numeric score (0-100), a 2-sentence summary, key strengths, weaknesses, missing skills for this role, concrete improvement suggestions, ATS-friendliness feedback, and a final recommendation.`;
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const model = "gemini-2.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "submit_resume_analysis",
-            description: "Submit the structured resume analysis.",
-            parameters: {
-              type: "object",
-              properties: {
-                score: { type: "number" },
-                summary: { type: "string" },
-                strengths: { type: "array", items: { type: "string" } },
-                weaknesses: { type: "array", items: { type: "string" } },
-                missingSkills: { type: "array", items: { type: "string" } },
-                suggestions: { type: "array", items: { type: "string" } },
-                atsFeedback: { type: "string" },
-                recommendation: { type: "string" },
-              },
-              required: [
-                "score",
-                "summary",
-                "strengths",
-                "weaknesses",
-                "missingSkills",
-                "suggestions",
-                "atsFeedback",
-                "recommendation",
-              ],
-              additionalProperties: false,
-            },
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: user }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            score: { type: "NUMBER" },
+            summary: { type: "STRING" },
+            strengths: { type: "ARRAY", items: { type: "STRING" } },
+            weaknesses: { type: "ARRAY", items: { type: "STRING" } },
+            missingSkills: { type: "ARRAY", items: { type: "STRING" } },
+            suggestions: { type: "ARRAY", items: { type: "STRING" } },
+            atsFeedback: { type: "STRING" },
+            recommendation: { type: "STRING" },
           },
+          required: [
+            "score",
+            "summary",
+            "strengths",
+            "weaknesses",
+            "missingSkills",
+            "suggestions",
+            "atsFeedback",
+            "recommendation",
+          ],
         },
-      ],
-      tool_choice: { type: "function", function: { name: "submit_resume_analysis" } },
+      },
     }),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    if (res.status === 429) throw new Error("AI rate limit exceeded. Please try again in a moment.");
-    if (res.status === 402) throw new Error("AI credits exhausted. Please add credits in your Lovable workspace.");
-    throw new Error(`AI gateway error (${res.status}): ${text.slice(0, 200)}`);
+    if (res.status === 429) throw new Error("Gemini rate limit exceeded. Please try again in a moment.");
+    throw new Error(`Gemini API error (${res.status}): ${text.slice(0, 300)}`);
   }
 
   const data = await res.json();
-  const args = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  if (!args) throw new Error("AI returned no structured analysis");
-  return JSON.parse(args) as Omit<AnalysisResult, "emailSent" | "emailError">;
+  const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!jsonText) throw new Error("Gemini returned no analysis");
+  return JSON.parse(jsonText) as Omit<AnalysisResult, "emailSent" | "emailError">;
 }
 
 function buildEmailHtml(a: Omit<AnalysisResult, "emailSent" | "emailError">, role: string) {
@@ -207,7 +195,7 @@ export const analyzeResume = createServerFn({ method: "POST" })
       );
     }
 
-    const analysis = await callLovableAI(resumeText, data.role);
+    const analysis = await callGeminiAI(resumeText, data.role);
 
     let emailSent = false;
     let emailError: string | undefined;
