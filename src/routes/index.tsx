@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useRef, type FormEvent } from "react";
 import {
@@ -15,9 +15,6 @@ import {
   Mail,
   X,
   Download,
-  History,
-  LogIn,
-  LogOut,
   Wand2,
   Briefcase,
 } from "lucide-react";
@@ -34,9 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { analyzeResume, type AnalysisResult } from "@/lib/analyze.functions";
-import { saveAnalysis } from "@/lib/history.functions";
-import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -76,8 +70,7 @@ const LOADING_MESSAGES = [
 
 function Home() {
   const analyze = useServerFn(analyzeResume);
-  const save = useServerFn(saveAnalysis);
-  const { user } = useAuth();
+
 
   const [file, setFile] = useState<File | null>(null);
   const [role, setRole] = useState<string>("");
@@ -147,22 +140,6 @@ function Home() {
       });
       setResult(res);
 
-      if (user) {
-        try {
-          await save({
-            data: {
-              fileName: file.name,
-              role: finalRole,
-              jobDescription: jobDescription.trim(),
-              score: res.score,
-              matchPercent: res.matchPercent,
-              result: res as unknown as Record<string, unknown>,
-            },
-          });
-        } catch (err) {
-          console.error("Failed to save analysis:", err);
-        }
-      }
 
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
@@ -179,38 +156,10 @@ function Home() {
     setError(null);
   }
 
-  async function signOut() {
-    await supabase.auth.signOut();
-  }
-
   return (
     <main className="min-h-screen w-full px-4 py-10 md:py-16">
       <div className="mx-auto max-w-3xl">
-        <nav className="mb-6 flex items-center justify-end gap-2 print:hidden">
-          {user ? (
-            <>
-              <Link
-                to="/history"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-card/60 hover:text-foreground"
-              >
-                <History className="size-4" /> History
-              </Link>
-              <button
-                onClick={signOut}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-card/60 hover:text-foreground"
-              >
-                <LogOut className="size-4" /> Sign out
-              </button>
-            </>
-          ) : (
-            <Link
-              to="/auth"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/60 px-3 py-1.5 text-sm hover:bg-card"
-            >
-              <LogIn className="size-4" /> Sign in
-            </Link>
-          )}
-        </nav>
+
 
         <header className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur">
@@ -344,12 +293,6 @@ function Home() {
               />
             </div>
 
-            {!user && (
-              <div className="mt-4 rounded-lg border border-border bg-card/40 px-4 py-3 text-xs text-muted-foreground">
-                💡 <Link to="/auth" className="text-primary-glow hover:underline">Sign in</Link>{" "}
-                to save every analysis to your history.
-              </div>
-            )}
 
             {error && (
               <div className="mt-5 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-foreground">
